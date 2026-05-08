@@ -1,196 +1,205 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Mar 24 10:36:53 2026
+# Creator = l3g0b0y
 
-@author: l3g0b0y
-"""
+#-------------#
+#--Variables--#
+#-------------#
 
-import tkinter as tk
-from tkinter import ttk, filedialog as fd, messagebox as msg
-import numpy as np
-import sounddevice as sd
-import wave
+ToolsTrueUSB = False
+ToolsTrueSound = False
 
-# ---------------- AUDIO ENCODING ---------------- #
+import time
+import sys
+import os
 
-def file_to_audio(file_path):
-    with open(file_path, "rb") as f:
-        data = f.read()
+ABORT_TIMEOUT = 15
+ESC_DELAY = 3
+last_action_time = time.time()
 
-    sample_rate = 44100
-    duration = 0.01
+#-----------#
+#--Modules--#
+#-----------#
 
-    audio = []
+import keyboard as ink
+from tkinter import filedialog as fd
 
-    for byte in data:
-        for i in range(8):
-            bit = (byte >> i) & 1
-            freq = 2000 if bit else 1000
+try:
+    import usb.core as Pens
+    import sounddevice as Paper
 
-            t = np.linspace(0, duration, int(sample_rate * duration), False)
-            tone = np.sin(2 * np.pi * freq * t)
+    ToolsTrueUSB = True
+    ToolsTrueSound = True
 
-            audio.extend(tone)
+except ImportError as e:
+    print(f"Uh Oh! It looks like the app can't start!\n {e}")
+    ToolsTrueUSB = False
+    ToolsTrueSound = False
 
-    return np.array(audio), sample_rate
+#-------------#
+#--Functions--#
+#-------------#
 
+def reset_timer():
+    global last_action_time
+    last_action_time = time.time()
 
-# ---------------- AUDIO STEGANOGRAPHY ---------------- #
+def abort_countdown():
+    print(f"\n[!] Abort triggered. Closing in {ESC_DELAY} seconds...")
+    
+    for i in range(ESC_DELAY, 0, -1):
+        print(f"Exiting in {i}...")
+        time.sleep(1)
 
-def hide_audio(cover_path, secret_path, output_path):
-    with wave.open(cover_path, 'rb') as cover:
-        params = cover.getparams()
-        cover_frames = bytearray(cover.readframes(cover.getnframes()))
+    print("Force closing application...")
 
-    with wave.open(secret_path, 'rb') as secret:
-        secret_frames = bytearray(secret.readframes(secret.getnframes()))
+    try:
+        ink.unhook_all()   # remove all keyboard hooks
+    except:
+        pass
 
-    if len(secret_frames) > len(cover_frames):
-        raise ValueError("Secret audio too large!")
+    sys.stdout.flush()
 
-    for i in range(len(secret_frames)):
-        cover_frames[i] = (cover_frames[i] & 0b11111110) | (secret_frames[i] & 1)
+    import os
+    os._exit(0)
 
-    with wave.open(output_path, 'wb') as out:
-        out.setparams(params)
-        out.writeframes(cover_frames)
+def Selector():
+    devices = list(Pens.find(find_all=True, idProduct=0x01))
 
+    if len(devices) == 0:
+        print("No Audio devices detected")
+        return False
 
-# ---------------- UPLOADER ---------------- #
+    print("Select USB devices")
+    for i, dev in enumerate(devices):
+        print(f"{i+1} : {dev}")
 
-def Uploader(w):
-    file_path = fd.askopenfilename(
-        title="Upload code",
-        filetypes=[("Code files", "*.c *.cpp *.bin"), ("All files", "*.*")]
-    )
+    try:
+        keys = int(input("Enter index ID of device : "))
+        return devices[keys - 1]
+    except:
+        print("Invalid selection")
+        return False
 
-    if not file_path:
+def Writer():
+    Dev = Pens.find(find_all=True, idProduct = 0x01)
+    Dev = list(Dev)
+
+    if len(Dev) == 0:
+        print("No device found")
         return
 
-    EACw = tk.Toplevel(w)
-    EACw.title("Cassette Upload")
-    EACw.geometry("450x400")
+    device = Dev[0]
+    device.set_configuration()
 
-    tk.Label(EACw, text="Selected File:", font=("Arial", 10, "bold")).pack()
-    tk.Label(EACw, text=file_path, wraplength=400).pack(pady=5)
+    File = fd.askopenfilename(
+        title="Select script",
+        filetypes=[("Custom computer scripts", "*.asm *.bin *.c *.cpp")]
+    )
 
-    # ---------------- DEVICE SELECTOR ---------------- #
+    if not File:
+        print("No file selected")
+        return
 
-    devices = sd.query_devices()
-    device_names = [f"{i}: {d['name']}" for i, d in enumerate(devices)]
+    try:
+        with open(File, "rb") as f:
+            data = f.read()
+            device.write(1, data)  # endpoint 1 (example)
+        print("Write successful")
+    except Exception as e:
+        print(f"Write failed: {e}")
 
-    selected_device = tk.StringVar(value=device_names[0])
+def DriverSetup():
+    devices = list(Pens.find(find_all=True, idProduct=0x08))
 
-    tk.Label(EACw, text="Select Output Device:").pack(pady=5)
-    device_menu = ttk.Combobox(EACw, values=device_names, textvariable=selected_device)
-    device_menu.pack(fill="x", padx=20)
+    if len(devices) == 0:
+        print("No Storage devices detected")
+        return False
 
-    # ---------------- AUDIO FILES ---------------- #
+    print("Select USB devices")
+    for i, dev in enumerate(devices):
+        print(f"{i+1} : {dev}")
 
-    cover_audio = tk.StringVar(value="No cover selected")
-    secret_audio = tk.StringVar(value="No secret selected")
+    try:
+        keys = int(input("Enter index ID of device : "))
+        return devices[keys - 1]
+    except:
+        print("Invalid selection")
+        return False
 
-    def select_cover():
-        path = fd.askopenfilename(filetypes=[("WAV files", "*.wav")])
-        if path:
-            cover_audio.set(path)
+def Writer1():
+    Dev = Pens.find(find_all=True, idProduct = 0x01)
+    Dev = list(Dev)
 
-    def select_secret():
-        path = fd.askopenfilename(filetypes=[("WAV files", "*.wav")])
-        if path:
-            secret_audio.set(path)
+    if len(Dev) == 0:
+        print("No device found")
+        return
 
-    tk.Label(EACw, text="Cover Audio").pack()
-    tk.Label(EACw, textvariable=cover_audio, wraplength=400).pack()
-    ttk.Button(EACw, text="Select Cover", command=select_cover).pack(pady=5)
+    device = Dev[0]
+    device.set_configuration()
 
-    tk.Label(EACw, text="Secret Audio").pack()
-    tk.Label(EACw, textvariable=secret_audio, wraplength=400).pack()
-    ttk.Button(EACw, text="Select Secret", command=select_secret).pack(pady=5)
+    File = fd.askopenfilename(
+        title="Select script",
+        filetypes=[("Custom computer scripts", "*.asm *.bin *.c *.cpp")]
+    )
 
-    # ---------------- PROGRESS ---------------- #
+    if not File:
+        print("No file selected")
+        return
 
-    progress = ttk.Progressbar(EACw, length=350)
-    progress.pack(pady=15)
+    try:
+        with open(File, "rb") as f:
+            data = f.read()
+            device.write(1, data)  # endpoint 1 (example)
+        print("Write successful")
+    except Exception as e:
+        print(f"Write failed: {e}")
 
-    status = tk.Label(EACw, text="Ready", fg="green")
-    status.pack()
+#-----------------------#
+#--Inputs-and-controls--#
+#-----------------------#
 
-    # ---------------- ENCRYPT BUTTON ---------------- #
+ink.add_hotkey("esc", abort_countdown)
 
-    def encrypt_audio():
-        try:
-            if cover_audio.get() == "No cover selected" or secret_audio.get() == "No secret selected":
-                msg.showerror("Error", "Select both audio files!")
-                return
+print("Welcome to the cassette PC encoder!")
+print("Would you like to - \n1. Flash Custom Cassette ROM\n2. Setup custom drivers\n3. Exit")
 
-            output = "encrypted.wav"
-            hide_audio(cover_audio.get(), secret_audio.get(), output)
+while True:
+    # ⏱ Auto abort
+    if time.time() - last_action_time > ABORT_TIMEOUT:
+        print("\n[!] No activity detected. Auto exiting...")
+        break
 
-            msg.showinfo("Done", f"Encrypted audio saved as {output}")
+    if ink.is_pressed("1"):
+        reset_timer()
+        print("\n[1] Flash selected")
 
-        except Exception as e:
-            msg.showerror("Error", str(e))
+        dev = Selector()
+        if dev:
+            confirm = input("install? (y/n): ").lower()
+            if confirm == "y":
+                Writer()
+            else:
+                print("Aborted")
+        else:
+            print("No devices found")
 
-    ttk.Button(EACw, text="Encrypt Audio", command=encrypt_audio).pack(pady=5)
+        ink.wait("1")
 
-    # ---------------- START UPLOAD ---------------- #
+    elif ink.is_pressed("2"):
+        reset_timer()
+        print("\n[2] Driver flash selected")
+        dev = DriverSetup()
+        if dev:
+            confirm = input("install? (y/n): ").lower()
+            if confirm == "y":
+                Writer1()
+            else:
+                print("Aborted")
+        else:
+            print("No devices found")
 
-    def start_upload():
-        try:
-            status.config(text="Encoding...", fg="orange")
-            EACw.update_idletasks()
-
-            audio, sr = file_to_audio(file_path)
-
-            # Set selected device
-            device_index = int(selected_device.get().split(":")[0])
-            sd.default.device = device_index
-
-            status.config(text="Playing to cassette...", fg="blue")
-
-            total = len(audio)
-            chunk = sr // 10
-
-            sd.play(audio, sr, blocking=False)
-
-            for i in range(0, total, chunk):
-                progress["value"] = (i / total) * 100
-                EACw.update_idletasks()
-
-            sd.wait()
-            progress["value"] = 100
-
-            status.config(text="Done!", fg="green")
-            msg.showinfo("Success", "Written to cassette 🎵")
-
-        except Exception as e:
-            msg.showerror("Error", str(e))
-
-    ttk.Button(EACw, text="Start Recording", command=start_upload).pack(pady=10)
-
-
-# ---------------- MAIN UI ---------------- #
-
-w = tk.Tk()
-w.title("Cassette Programmer Pro")
-w.geometry("800x400")
-
-sidebar = ttk.Frame(w, width=200)
-sidebar.pack(side="left", fill="y")
-
-ttk.Label(sidebar, text="Program Tape", font=("Arial", 16, "bold")).pack(pady=20)
-
-ttk.Button(
-    sidebar,
-    text="Upload",
-    command=lambda: Uploader(w)
-).pack(pady=10, padx=20, fill="x")
-
-main = ttk.Frame(w)
-main.pack(side="right", expand=True, fill="both")
-
-tk.Label(main, text="Cassette System", font=("Arial", 18)).pack(pady=50)
-
-w.mainloop()
+        ink.wait("1")
+    
+    elif ink.is_pressed("3"):
+        reset_timer()
+        print("Exiting...")
+        break
